@@ -43,7 +43,7 @@ print(multi_band_file, "Size:", multi_band_dataset.RasterXSize, "x", multi_band_
 if sensor == 'WV3':
     red = 2
     nir = 3
-elseif sensor == 'Planet':
+elif sensor == 'Planet':
     red = 3
     nir = 4
 else:
