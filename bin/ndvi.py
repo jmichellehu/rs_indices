@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Calculate NDVI from DG input imagery that is already aligned and orthorectified
+# Calculate NDVI from input imagery that is already aligned and orthorectified
 # Adapted from http://gencersumbul.bilkent.edu.tr/post/gdal_scripts/
 
 
@@ -43,6 +43,9 @@ print(multi_band_file, "Size:", multi_band_dataset.RasterXSize, "x", multi_band_
 if sensor == 'WV3':
     red = 2
     nir = 3
+elseif sensor == 'Planet':
+    red = 3
+    nir = 4
 else:
     red = 4
     nir = 5
