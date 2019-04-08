@@ -5,6 +5,7 @@
 
 
 # import libraries
+from osgeo import gdalconst
 from gdalconst import *
 import argparse, numpy as np, gdal, struct, sys
 
