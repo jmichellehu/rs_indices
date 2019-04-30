@@ -4,10 +4,14 @@
 
 # Adapted from http://gencersumbul.bilkent.edu.tr/post/gdal_scripts/
 
-# import libraries
-from osgeo import gdalconst
-from gdalconst import *
-import argparse, numpy as np,  gdal, struct, sys
+# system libraries and imports
+import sys
+import argparse
+import struct
+
+# import third party
+import numpy as np
+from osgeo import gdal
 
 print(gdal.VersionInfo())
 
@@ -40,28 +44,28 @@ GDAL2NUMPY_DATA_TYPE_CONVERSION = {
 }
 
 
-# Extract the green, NIR, and SWIR bands. Dictate dn_range for WV3 and L8 imagery (should be TOA reflectance values)
+# Extract the green, NIR, and SWIR bands (should be TOA reflectance values)
 if sensor == 'WV3':
     ms_noext = multi_band_file[:-4]
     swir_noext = swir_file[:-4]
 
     # Open single-band files as general access read only
-    multi_band_dataset = gdal.Open(ms_noext + "_b3_toa_refl.tif", GA_ReadOnly)
+    multi_band_dataset = gdal.Open(ms_noext + "_b3_toa_refl.tif", gdal.GA_ReadOnly)
     green_band = multi_band_dataset.GetRasterBand(1)
     print(green_band.XSize)
-    nir_band = gdal.Open(ms_noext + "_b7_toa_refl.tif", GA_ReadOnly).GetRasterBand(1)
-    swir_band = gdal.Open(swir_noext + "_b3_toa_refl.tif", GA_ReadOnly).GetRasterBand(1)
-    dn_range = 1    
+    nir_band = gdal.Open(ms_noext + "_b7_toa_refl.tif", gdal.GA_ReadOnly).GetRasterBand(1)
+    swir_band = gdal.Open(swir_noext + "_b3_toa_refl.tif", gdal.GA_ReadOnly).GetRasterBand(1)
+#     dn_range = 1    
     
 else:
     # L8 sensor level 1 imagery
     green = 3
     nir = 5
     swir = 6
-    dn_range = 1
+#     dn_range = 1
 
     # Open single-band files as general access read only
-    multi_band_dataset = gdal.Open(multi_band_file, GA_ReadOnly)  
+    multi_band_dataset = gdal.Open(multi_band_file, gdal.GA_ReadOnly)  
     green_band = multi_band_dataset.GetRasterBand(green)
     nir_band = multi_band_dataset.GetRasterBand(nir)
     swir_band = multi_band_dataset.GetRasterBand(swir)
@@ -105,7 +109,6 @@ for y in range(0, ysize, y_block_size):
         rows = y_block_size
     else:
         rows = ysize - y
-
     print(rows)
     # Loop through columns
     for x in range(0, xsize, x_block_size):
@@ -113,12 +116,16 @@ for y in range(0, ysize, y_block_size):
             cols = x_block_size
         else:
             cols = xsize - x
+        print(cols)
         # Read GDAL dataset as numpy array of specified type
         green_band_array = green_band.ReadAsArray(x, y, cols, rows).astype('float32')
-        print(type(nir_band))
+        print("green read")
+
         nir_band_array = nir_band.ReadAsArray(x, y, cols, rows).astype('float32')
-        print(type(nir_band_array))
+        print("nir read")
+
         swir_band_array = swir_band.ReadAsArray(x, y, cols, rows).astype('float32')
+        print("swir read")        
         
         # Omit pixels with negative reflectance values or reflectance values > 1
         green_band_array = (green_band_array >= 0) & (green_band_array <=1)
@@ -134,18 +141,17 @@ for y in range(0, ysize, y_block_size):
         # Adjust NDSI values based on threshold method
         if NDSI_type == "hall":
             # implement threshold based on nir and green values
-            ndsi_array = np.where((ndsi_array >= 0.4) & (ndsi_array <= 1.0) & (nir_band_array>=0.1 * dn_range) & (green_band_array>=0.1 * dn_range), ndsi_array, -32768)
+            ndsi_array = np.where((ndsi_array >= 0.4) & (ndsi_array <= 1.0) & (nir_band_array>=0.1) & (green_band_array>=0.1), ndsi_array, -32768)
         
         NDSI_dataset.GetRasterBand(1).WriteArray(ndsi_array.astype('float32'), x, y)
 #         print(ndsi_array.shape, type(ndsi_array), ndsi_array.min(), ndsi_array.max())
 
 
-        del green_band_array
-        del swir_band_array
-        del nir_band_array
-        del mask_array
-        del ndsi_array
-        del ndsi_thresh_array
+        green_band_array = None
+        swir_band_array = None
+        nir_band_array = None
+        mask_array = None
+        ndsi_array = None
 
         blocks += 1
 
