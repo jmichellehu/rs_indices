@@ -129,7 +129,7 @@ for y in range(0, ysize, y_block_size):
         
         # Create mask of valid pixels - positive reflectance values <=1
         valid_mask = (red_band_array >= 0) & (red_band_array <=1) & (nir_band_array >= 0) & (nir_band_array <= 1)        
-        ndvi_array = np.ma.array(ndvi_array, mask=red_nir_mask, fill_value=-32768)
+        ndvi_array = np.ma.array(ndvi_array, mask=valid_mask, fill_value=-32768)
         ndvi_band_out.WriteArray(ndvi_array, x, y)
 
         red_band_array = None
