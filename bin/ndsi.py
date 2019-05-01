@@ -52,17 +52,16 @@ if sensor == 'WV3':
     # Open single-band files as general access read only
     multi_band_dataset = gdal.Open(ms_noext + "_b3_toa_refl.tif", gdal.GA_ReadOnly)
     green_band = multi_band_dataset.GetRasterBand(1)
-    print(green_band.XSize)
-    nir_band = gdal.Open(ms_noext + "_b7_toa_refl.tif", gdal.GA_ReadOnly).GetRasterBand(1)
-    swir_band = gdal.Open(swir_noext + "_b3_toa_refl.tif", gdal.GA_ReadOnly).GetRasterBand(1)
-#     dn_range = 1    
+    nir_dataset = gdal.Open(ms_noext + "_b7_toa_refl.tif", gdal.GA_ReadOnly)
+    swir_dataset = gdal.Open(swir_noext + "_b3_toa_refl.tif", gdal.GA_ReadOnly)
+    nir_band = nir_dataset.GetRasterBand(1)
+    swir_band = swir_dataset.GetRasterBand(1)
     
 else:
     # L8 sensor level 1 imagery
     green = 3
     nir = 5
     swir = 6
-#     dn_range = 1
 
     # Open single-band files as general access read only
     multi_band_dataset = gdal.Open(multi_band_file, gdal.GA_ReadOnly)  
@@ -80,6 +79,15 @@ print(multi_band_file, "Size:", multi_band_dataset.RasterXSize, "x",
 xsize = green_band.XSize
 ysize = green_band.YSize
 
+# Populate NDSI raster, use data blocks to save on memory usage
+
+#block_sizes = green_band.GetBlockSize()
+
+# Set to 1024 x 1024 - when gdalwarping WV3 imagery in previous steps to get to toa_refl, these are getting messed around along the way because you are setting them in the options (see below)
+x_block_size = 1024 #block_sizes[0]
+y_block_size = 1024 #block_sizes[1]
+
+
 #Create NDSI output raster with specific raster format
 driver = gdal.GetDriverByName('GTiff')
 
@@ -88,18 +96,15 @@ NDSI_dataset = driver.Create(
     multi_band_dataset.RasterXSize,
     multi_band_dataset.RasterYSize,
     1, # number of output bands -- just need one for NDSI
-    6,) # float32
+    6, # float32
+    options=['TILED=YES', 'BLOCKXSIZE=%i' % x_block_size, 'BLOCKYSIZE=%i' % y_block_size])#, 'BIGTIFF=IF_SAFER', 'COMPRESS=LZW',])
 
 # Match the geotransform and projection to that of the input image
 NDSI_dataset.SetGeoTransform(multi_band_dataset.GetGeoTransform())
 NDSI_dataset.SetProjection(multi_band_dataset.GetProjection())
-# NDSI_dataset.GetRasterBand(1).SetNoDataValue(-32768)
 
-# Populate NDSI raster, use data blocks to save on memory usage
-#block_sizes = green_band.GetBlockSize()
-    # Set to 1024 x 1024 - when gdalwarping WV3 imagery in previous steps to get to toa_refl, these are getting messed around along the way...
-x_block_size = 1024 #block_sizes[0]
-y_block_size = 1024 #block_sizes[1]
+ndsi_band_out = NDSI_dataset.GetRasterBand(1)
+ndsi_band_out.SetNoDataValue(-32768)
     
 blocks = 0
 
@@ -117,35 +122,26 @@ for y in range(0, ysize, y_block_size):
         else:
             cols = xsize - x
         print(cols)
+
         # Read GDAL dataset as numpy array of specified type
         green_band_array = green_band.ReadAsArray(x, y, cols, rows).astype('float32')
-        print("green read")
-
         nir_band_array = nir_band.ReadAsArray(x, y, cols, rows).astype('float32')
-        print("nir read")
-
         swir_band_array = swir_band.ReadAsArray(x, y, cols, rows).astype('float32')
-        print("swir read")        
         
-        # Omit pixels with negative reflectance values or reflectance values > 1
-        green_band_array = (green_band_array >= 0) & (green_band_array <=1)
-        nir_band_array = (nir_band_array >= 0) & (nir_band_array <=1)
-        swir_band_array = (swir_band_array >= 0) & (swir_band_array <=1)
-
-        # Mask values which are undefined due to zero division (Green + SWIR = 0)
-        mask_array = np.not_equal((green_band_array + swir_band_array), 0)
+        # Calculate NDSI
+        ndsi_array = (green_band_array - swir_band_array) / (green_band_array + swir_band_array)
         
-        # Calculate NDSI values and put into separate array
-        ndsi_array = np.choose(mask_array, (-32768, (green_band_array - swir_band_array) / (green_band_array + swir_band_array)))
-
-        # Adjust NDSI values based on threshold method
+        # Create mask of valid pixels - those with positive reflectance values <=1 in the green and swir bands.  Work around green + swir = 0 in denominator        
+        green_swir_mask = (green_band_array > 0) & (green_band_array <=1) & (swir_band_array >= 0) & (swir_band_array <=1)
+        ndsi_array = np.ma.array(ndsi_array, mask = ~(green_swir_mask), fill_value=-32768, dtype=np.float32)
+        
+        # Adjust NDSI values based on modified version of Hall's threshold method
         if NDSI_type == "hall":
-            # implement threshold based on nir and green values
-            ndsi_array = np.where((ndsi_array >= 0.4) & (ndsi_array <= 1.0) & (nir_band_array>=0.1) & (green_band_array>=0.1), ndsi_array, -32768)
+            hall_mask = (nir_band_array >= 0.1) & (nir_band_array <=1) & (ndsi_array >= 0.4) & (ndsi_array <= 1.0) & (green_band_array>=0.1)
+            ndsi_array=np.ma.array(ndsi_array, mask=~(hall_mask), fill_value=-32768, dtype=np.float32)
         
-        NDSI_dataset.GetRasterBand(1).WriteArray(ndsi_array.astype('float32'), x, y)
-#         print(ndsi_array.shape, type(ndsi_array), ndsi_array.min(), ndsi_array.max())
-
+        # Write this chunk to memory
+        ndsi_band_out.WriteArray(ndsi_array, x, y)
 
         green_band_array = None
         swir_band_array = None
