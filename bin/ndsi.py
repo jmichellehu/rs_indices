@@ -138,10 +138,7 @@ for y in range(0, ysize, y_block_size):
         # Create mask of valid pixels - those with positive reflectance values <=1 in the green and swir bands.  Work around green + swir = 0 in denominator        
         green_swir_mask = (green_band_array > 0) & (green_band_array <=1) & (swir_band_array >= 0) & (swir_band_array <=1)
         ndsi_array = np.ma.array(ndsi_array, mask=~(green_swir_mask), fill_value=-32768)
-        
-        # Mask values which are undefined due to zero division (green + SWIR = 0)
-        mask_array = np.not_equal((red_band_array + infrared_band_array), 0)
-        
+                
         # Adjust NDSI values based on modified version of Hall's threshold method
         if NDSI_type == "hall":
             hall_mask = (nir_band_array >= 0.1) & (nir_band_array <=1) & (ndsi_array >= 0.4) & (ndsi_array <= 1.0) & (green_band_array>=0.1)
