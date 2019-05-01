@@ -13,12 +13,10 @@ import struct
 import numpy as np
 from osgeo import gdal
 
-print(gdal.VersionInfo())
-
 # Have user define input and output image filenames
-parser = argparse.ArgumentParser(description='GeoTiff Multi Spectral Image to NDSI Image Conversion Script with Normalized Difference Snow Index Measurement')
-parser.add_argument('-in', '--MS_input_file', help='GeoTiff multi band MS image file', required=True)
-parser.add_argument('-in2', '--SWIR_input_file', help='GeoTiff multi band SWIR image file for WV3', required=False)
+parser = argparse.ArgumentParser(description='Multispectral Image to NDSI Image Conversion Script with Normalized Difference Snow Index Measurement')
+parser.add_argument('-in', '--MS_input_file', help='Multiband MS image file', required=True)
+parser.add_argument('-in2', '--SWIR_input_file', help='Multiband SWIR image file for WV3', required=False)
 parser.add_argument('-in_sensor', '--input_satellite', help='Sensor name - either WV3 or L8', required=True)
 parser.add_argument('-in_ndsi', '--input_thresh', help='String of NDSI outfile type: either base or hall', required=False)
 parser.add_argument('-out', '--output_file', help='Where NDSI image is to be saved', required=True)
@@ -42,7 +40,6 @@ GDAL2NUMPY_DATA_TYPE_CONVERSION = {
   10: "complex64",
   11: "complex128",
 }
-
 
 # Extract the green, NIR, and SWIR bands (should be TOA reflectance values)
 if sensor == 'WV3':
@@ -71,10 +68,13 @@ else:
 
 
 # Print out general information on dataset - choose green band
-print(multi_band_file, "Driver:", multi_band_dataset.GetDriver().ShortName, 
+print(multi_band_file, 
+      "Driver:", multi_band_dataset.GetDriver().ShortName, 
       "/", multi_band_dataset.GetDriver().LongName)
-print(multi_band_file, "Size:", multi_band_dataset.RasterXSize, "x", 
-      multi_band_dataset.RasterYSize, "x", multi_band_dataset.RasterCount)
+print(multi_band_file, 
+      "Size:", multi_band_dataset.RasterXSize, 
+      "x", multi_band_dataset.RasterYSize, 
+      "x", multi_band_dataset.RasterCount)
 
 xsize = green_band.XSize
 ysize = green_band.YSize
@@ -97,7 +97,12 @@ NDSI_dataset = driver.Create(
     multi_band_dataset.RasterYSize,
     1, # number of output bands -- just need one for NDSI
     6, # float32
-    options=['TILED=YES', 'BLOCKXSIZE=%i' % x_block_size, 'BLOCKYSIZE=%i' % y_block_size])#, 'BIGTIFF=IF_SAFER', 'COMPRESS=LZW',])
+    options=['TILED=YES', 
+             'BLOCKXSIZE=%i' % x_block_size, 
+             'BLOCKYSIZE=%i' % y_block_size, 
+             'BIGTIFF=IF_SAFER', 
+             'COMPRESS=LZW',
+            ])
 
 # Match the geotransform and projection to that of the input image
 NDSI_dataset.SetGeoTransform(multi_band_dataset.GetGeoTransform())
@@ -114,15 +119,14 @@ for y in range(0, ysize, y_block_size):
         rows = y_block_size
     else:
         rows = ysize - y
-    print(rows)
+    
     # Loop through columns
     for x in range(0, xsize, x_block_size):
         if x + x_block_size < xsize:
             cols = x_block_size
         else:
             cols = xsize - x
-        print(cols)
-
+        
         # Read GDAL dataset as numpy array of specified type
         green_band_array = green_band.ReadAsArray(x, y, cols, rows).astype('float32')
         nir_band_array = nir_band.ReadAsArray(x, y, cols, rows).astype('float32')
@@ -133,12 +137,15 @@ for y in range(0, ysize, y_block_size):
         
         # Create mask of valid pixels - those with positive reflectance values <=1 in the green and swir bands.  Work around green + swir = 0 in denominator        
         green_swir_mask = (green_band_array > 0) & (green_band_array <=1) & (swir_band_array >= 0) & (swir_band_array <=1)
-        ndsi_array = np.ma.array(ndsi_array, mask = ~(green_swir_mask), fill_value=-32768, dtype=np.float32)
+        ndsi_array = np.ma.array(ndsi_array, mask=~(green_swir_mask), fill_value=-32768)
+        
+        # Mask values which are undefined due to zero division (green + SWIR = 0)
+        mask_array = np.not_equal((red_band_array + infrared_band_array), 0)
         
         # Adjust NDSI values based on modified version of Hall's threshold method
         if NDSI_type == "hall":
             hall_mask = (nir_band_array >= 0.1) & (nir_band_array <=1) & (ndsi_array >= 0.4) & (ndsi_array <= 1.0) & (green_band_array>=0.1)
-            ndsi_array=np.ma.array(ndsi_array, mask=~(hall_mask), fill_value=-32768, dtype=np.float32)
+            ndsi_array=np.ma.array(ndsi_array, mask=~(hall_mask), fill_value=-32768)
         
         # Write this chunk to memory
         ndsi_band_out.WriteArray(ndsi_array, x, y)
