@@ -53,7 +53,7 @@ if sensor == 'WV3':
     swir_dataset = gdal.Open(swir_noext + "_b3_toa_refl.tif", gdal.GA_ReadOnly)
     nir_band = nir_dataset.GetRasterBand(1)
     swir_band = swir_dataset.GetRasterBand(1)
-    
+
 else:
     # L8 sensor level 1 imagery
     green = 3
@@ -61,19 +61,19 @@ else:
     swir = 6
 
     # Open single-band files as general access read only
-    multi_band_dataset = gdal.Open(multi_band_file, gdal.GA_ReadOnly)  
+    multi_band_dataset = gdal.Open(multi_band_file, gdal.GA_ReadOnly)
     green_band = multi_band_dataset.GetRasterBand(green)
     nir_band = multi_band_dataset.GetRasterBand(nir)
     swir_band = multi_band_dataset.GetRasterBand(swir)
 
 
 # Print out general information on dataset - choose green band
-print(multi_band_file, 
-      "Driver:", multi_band_dataset.GetDriver().ShortName, 
+print(multi_band_file,
+      "Driver:", multi_band_dataset.GetDriver().ShortName,
       "/", multi_band_dataset.GetDriver().LongName)
-print(multi_band_file, 
-      "Size:", multi_band_dataset.RasterXSize, 
-      "x", multi_band_dataset.RasterYSize, 
+print(multi_band_file,
+      "Size:", multi_band_dataset.RasterXSize,
+      "x", multi_band_dataset.RasterYSize,
       "x", multi_band_dataset.RasterCount)
 
 xsize = green_band.XSize
@@ -97,10 +97,10 @@ NDSI_dataset = driver.Create(
     multi_band_dataset.RasterYSize,
     1, # number of output bands -- just need one for NDSI
     6, # float32
-    options=['TILED=YES', 
-             'BLOCKXSIZE=%i' % x_block_size, 
-             'BLOCKYSIZE=%i' % y_block_size, 
-             'BIGTIFF=IF_SAFER', 
+    options=['TILED=YES',
+             'BLOCKXSIZE=%i' % x_block_size,
+             'BLOCKYSIZE=%i' % y_block_size,
+             'BIGTIFF=IF_SAFER',
              'COMPRESS=LZW',
             ])
 
@@ -110,7 +110,7 @@ NDSI_dataset.SetProjection(multi_band_dataset.GetProjection())
 
 ndsi_band_out = NDSI_dataset.GetRasterBand(1)
 ndsi_band_out.SetNoDataValue(-32768)
-    
+
 blocks = 0
 
 # loop through rows
@@ -119,31 +119,31 @@ for y in range(0, ysize, y_block_size):
         rows = y_block_size
     else:
         rows = ysize - y
-    
+
     # Loop through columns
     for x in range(0, xsize, x_block_size):
         if x + x_block_size < xsize:
             cols = x_block_size
         else:
             cols = xsize - x
-        
+
         # Read GDAL dataset as numpy array of specified type
         green_band_array = green_band.ReadAsArray(x, y, cols, rows).astype('float32')
         nir_band_array = nir_band.ReadAsArray(x, y, cols, rows).astype('float32')
         swir_band_array = swir_band.ReadAsArray(x, y, cols, rows).astype('float32')
-        
+
         # Calculate NDSI
         ndsi_array = (green_band_array - swir_band_array) / (green_band_array + swir_band_array)
-        
-        # Create mask of valid pixels - those with positive reflectance values <=1 in the green and swir bands.  Work around green + swir = 0 in denominator        
+
+        # Create mask of valid pixels - those with positive reflectance values <=1 in the green and swir bands.  Work around green + swir = 0 in denominator
         green_swir_mask = (green_band_array > 0) & (green_band_array <=1) & (swir_band_array >= 0) & (swir_band_array <=1)
         ndsi_array = np.ma.array(ndsi_array, mask=~(green_swir_mask), fill_value=-32768)
-                
+
         # Adjust NDSI values based on modified version of Hall's threshold method
         if NDSI_type == "hall":
             hall_mask = (nir_band_array >= 0.1) & (nir_band_array <=1) & (ndsi_array >= 0.4) & (ndsi_array <= 1.0) & (green_band_array>=0.1)
             ndsi_array=np.ma.array(ndsi_array, mask=~(hall_mask), fill_value=-32768)
-        
+
         # Write this chunk to memory
         ndsi_band_out.WriteArray(ndsi_array, x, y)
 
