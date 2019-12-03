@@ -37,23 +37,23 @@ with rio.open(swir_file[:-4] + "_" + multi_band_file[:-4] + "_b3_toa_refl.tif") 
     swir3_arr=f.read()
     swir3_ndv=f.nodata
 
-with rio.open(swir_file[:-4] + "_" + multi_band_file[:-4] + "_b2_toa_refl.tif") as f:
-    swir2_arr=f.read()
-    swir2_ndv=f.nodata
+# with rio.open(swir_file[:-4] + "_" + multi_band_file[:-4] + "_b2_toa_refl.tif") as f:
+#     swir2_arr=f.read()
+#     swir2_ndv=f.nodata
 
-print(g_ndv, swir2_ndv, swir3_ndv)
+# print(g_ndv, swir2_ndv, swir3_ndv)
 
 # Calculate NDSI
 # NDSI = (green - swir) / (green + swir)
 # In ndsi.py script, NDSI is calculated with values (0, 1] for both green and SWIR bands
-ndsi_2= (green_arr - swir2_arr) / (green_arr + swir2_arr)
-# ndsi_3= (green_arr - swir3_arr) / (green_arr + swir3_arr)
+# ndsi_2= (green_arr - swir2_arr) / (green_arr + swir2_arr)
+ndsi_3= (green_arr - swir3_arr) / (green_arr + swir3_arr)
 
 # Mask with ndv areas from green and swir arrays
-ndsi_2[green_arr==g_ndv]=g_ndv
-ndsi_2[swir2_arr==swir2_ndv]=swir2_ndv
-# ndsi_3[green_arr==g_ndv]=g_ndv
-# ndsi_3[swir3_arr==swir3_ndv]=swir3_ndv
+# ndsi_2[green_arr==g_ndv]=g_ndv
+# ndsi_2[swir2_arr==swir2_ndv]=swir2_ndv
+ndsi_3[green_arr==g_ndv]=g_ndv
+ndsi_3[swir3_arr==swir3_ndv]=swir3_ndv
 
 # Write these to array
 with rio.Env():
@@ -64,11 +64,11 @@ with rio.Env():
         count=1,
         compress='lzw')
 
-    with rio.open(out_fn, 'w', **prf) as dst:
-        dst.write(np.squeeze(ndsi_2).astype(rio.float32), 1)
+#     with rio.open(out_fn, 'w', **prf) as dst:
+#         dst.write(np.squeeze(ndsi_2).astype(rio.float32), 1)
 
-#     with rio.open(out_fn_3, 'w', **prf) as dst:
-#         dst.write(np.squeeze(ndsi_3).astype(rio.float32), 1)
+    with rio.open(out_fn, 'w', **prf) as dst:
+        dst.write(np.squeeze(ndsi_3).astype(rio.float32), 1)
         
 # # Do not institute low and high bounds for initial reflectance values right now.
 # # Adjust with out of bounds green and swir reflectance values
