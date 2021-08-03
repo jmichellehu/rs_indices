@@ -8,6 +8,10 @@ import rasterio as rio
 
 
 # NEED TO ADD HANDLING FOR OTHER SENSORS, not just WV2 and WV3
+#NDFSI = (nir - swir2)/(nir+swir2) -- LS OLI
+#NDWI= (NIR - SWIR band 6) / (NIR + SWIR band 6)
+
+
 
 def read_file(fn):
     with rio.open(fn) as f:
